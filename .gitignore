@@ -46,3 +46,9 @@ trained_models/
 # =========================
 *.log
 *.tmp
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp
