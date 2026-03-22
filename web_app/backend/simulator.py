@@ -55,9 +55,21 @@ def login() -> str:
 
 
 def load_data() -> pd.DataFrame:
-    """Load CSV and apply correlation drop."""
+    """Load CSV, apply correlation drop, sample balanced attacks/benign."""
     print(f"📂 Loading data from: {CSV_PATH}")
-    df = pd.read_csv(CSV_PATH, nrows=N_ROWS)
+
+    # Load full dataset to get both classes
+    df = pd.read_csv(CSV_PATH)
+
+    # Sample balanced: 50% attacks, 50% benign
+    half     = N_ROWS // 2
+    benign   = df[df['Label_Binary'] == 0].sample(n=half,      random_state=42)
+    attacks  = df[df['Label_Binary'] == 1].sample(n=N_ROWS - half, random_state=42)
+
+    df = pd.concat([benign, attacks]).sample(frac=1, random_state=42).reset_index(drop=True)
+
+    print(f"   🟢 Benign  : {len(benign):,}")
+    print(f"   🔴 Attacks : {len(attacks):,}")
 
     # Drop correlated features
     cols_to_drop = [c for c in CORRELATION_DROP if c in df.columns]
