@@ -23,9 +23,10 @@ class Prediction(db.Model):
     confidence    = db.Column(db.Float,       nullable=False)   # 0.0 → 1.0
     model_used    = db.Column(db.String(50),  nullable=False)
     needs_review  = db.Column(db.Boolean,     default=False)
+    batch_id      = db.Column(db.String(36),  nullable=True, index=True)
+    features_json = db.Column(db.Text, nullable=True)
 
     # Raw 34 features stored as JSON (for SHAP explanation later)
-    features_json = db.Column(db.Text,        nullable=True)
 
     def to_dict(self):
         return {

@@ -1,9 +1,11 @@
 import io
+import uuid
 import os
 import csv
 import json
 import pandas as pd
 from datetime import datetime, timedelta
+from sqlalchemy import func
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from models.database import db, Prediction
@@ -44,17 +46,22 @@ def _cleanup_old_predictions():
     Prediction.query.filter(Prediction.timestamp < cutoff).delete()
 
 
+# ── Single prediction ─────────────────────────────────────────────────────────
 @predict_bp.route('/predict', methods=['POST'])
 @jwt_required()
 def predict():
+    """POST /api/predict — single flow prediction."""
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
-    src_ip = data.pop('src_ip', None) or data.pop('Src IP', None)
-    dst_ip = data.pop('dst_ip', None) or data.pop('Dst IP', None)
-    src_port = data.get('src_port') or data.get('Src Port')  # ← get not pop
-    dst_port = data.get('dst_port') or data.get('Dst Port')  # ← get not pop # ← removes 'Dst Port'!
+    # Extract display fields — pop src_ip/dst_ip (not features)
+    # Use get for src_port/dst_port — Dst Port IS a feature, never pop it
+    src_ip   = data.pop('src_ip',   None) or data.pop('Src IP',   None)
+    dst_ip   = data.pop('dst_ip',   None) or data.pop('Dst IP',   None)
+    src_port = data.get('src_port') or data.get('Src Port')
+    dst_port = data.get('dst_port') or data.get('Dst Port')
+
     try:
         result = predict_single(data)
     except ValueError as e:
@@ -62,7 +69,7 @@ def predict():
     except RuntimeError as e:
         return jsonify({'error': str(e)}), 503
 
-    # Save features_json ONLY for attacks (saves 83% space)
+    # Save features_json ONLY for attacks (saves 83% space — used for SHAP)
     features_json = json.dumps(data) if result['prediction'] == 'Attack' else None
 
     pred = Prediction(
@@ -75,7 +82,8 @@ def predict():
         confidence    = result['confidence'],
         model_used    = get_model_name() or 'xgboost',
         needs_review  = result['needs_review'],
-        features_json = features_json
+        features_json = features_json,
+        batch_id      = None    # single predictions have no batch
     )
     db.session.add(pred)
     db.session.flush()
@@ -96,18 +104,23 @@ def predict():
     }), 200
 
 
+# ── Batch prediction ──────────────────────────────────────────────────────────
 @predict_bp.route('/predict/batch', methods=['POST'])
 @jwt_required()
 def predict_batch_endpoint():
+    """POST /api/predict/batch — CSV upload, batch prediction."""
     if 'file' not in request.files:
         return jsonify({'error': 'No file uploaded'}), 400
+
     file = request.files['file']
     if not file.filename.endswith('.csv'):
         return jsonify({'error': 'Only CSV files accepted'}), 400
+
     try:
         df = pd.read_csv(io.StringIO(file.read().decode('utf-8')))
     except Exception as e:
         return jsonify({'error': f'CSV parse error: {str(e)}'}), 422
+
     try:
         result_df = predict_batch(df)
     except ValueError as e:
@@ -116,9 +129,13 @@ def predict_batch_endpoint():
         return jsonify({'error': str(e)}), 503
 
     model_name = get_model_name() or 'xgboost'
+    batch_id   = str(uuid.uuid4())  # one unique ID for the whole upload
+
     for _, row in result_df.iterrows():
         is_attack     = row['prediction'] == 'Attack'
-        features_json = json.dumps({c: row[c] for c in FEATURE_COLUMNS if c in row}) if is_attack else None
+        features_json = json.dumps(
+            {c: row[c] for c in FEATURE_COLUMNS if c in row}
+        ) if is_attack else None
 
         pred = Prediction(
             src_ip        = row.get('Src IP') or row.get('src_ip'),
@@ -130,19 +147,23 @@ def predict_batch_endpoint():
             confidence    = row['confidence'] / 100,
             model_used    = model_name,
             needs_review  = bool(row['needs_review']),
-            features_json = features_json
+            features_json = features_json,
+            batch_id      = batch_id    # ← tag every row with the batch ID
         )
         db.session.add(pred)
         db.session.flush()
+
         alert = create_alert_if_needed(pred)
         if alert:
             db.session.add(alert)
+
         _append_csv(pred)
 
     _cleanup_old_predictions()
     db.session.commit()
 
     return jsonify({
+        'batch_id':     batch_id,
         'total':        len(result_df),
         'attacks':      int((result_df['prediction'] == 'Attack').sum()),
         'benign':       int((result_df['prediction'] == 'Benign').sum()),
@@ -150,12 +171,15 @@ def predict_batch_endpoint():
     }), 200
 
 
+# ── Prediction history (paginated) ────────────────────────────────────────────
 @predict_bp.route('/predictions', methods=['GET'])
 @jwt_required()
 def get_predictions():
-    page     = request.args.get('page', 1, type=int)
+    """GET /api/predictions — paginated prediction history for live monitor."""
+    page     = request.args.get('page',     1,  type=int)
     per_page = request.args.get('per_page', 50, type=int)
-    paged    = Prediction.query.order_by(
+
+    paged = Prediction.query.order_by(
         Prediction.timestamp.desc()
     ).paginate(page=page, per_page=per_page, error_out=False)
 
@@ -164,4 +188,71 @@ def get_predictions():
         'page':        paged.page,
         'pages':       paged.pages,
         'predictions': [p.to_dict() for p in paged.items]
+    }), 200
+
+
+# ── Batch upload history ──────────────────────────────────────────────────────
+@predict_bp.route('/batches', methods=['GET'])
+@jwt_required()
+def get_batches():
+    """
+    GET /api/batches
+    Returns list of all batch uploads grouped by batch_id.
+    Used for the Upload & Analyze page — shows upload history
+    so user can pick which one to download.
+    """
+    rows = db.session.query(
+        Prediction.batch_id,
+        func.min(Prediction.timestamp).label('uploaded_at'),
+        func.count(Prediction.id).label('total'),
+        func.sum(db.case(
+            (Prediction.prediction == 'Attack', 1), else_=0
+        )).label('attacks'),
+        func.sum(db.case(
+            (Prediction.prediction == 'Benign', 1), else_=0
+        )).label('benign'),
+        func.max(Prediction.model_used).label('model_used')
+    ).filter(
+        Prediction.batch_id.isnot(None)
+    ).group_by(
+        Prediction.batch_id
+    ).order_by(
+        func.min(Prediction.timestamp).desc()
+    ).all()
+
+    return jsonify([
+        {
+            'batch_id':    row.batch_id,
+            'uploaded_at': row.uploaded_at.isoformat(),
+            'total':       row.total,
+            'attacks':     int(row.attacks or 0),
+            'benign':      int(row.benign  or 0),
+            'model_used':  row.model_used
+        }
+        for row in rows
+    ]), 200
+@predict_bp.route('/batches/<batch_id>', methods=['DELETE'])
+@jwt_required()
+def delete_batch(batch_id):
+    """
+    DELETE /api/batches/<batch_id>
+    Deletes all predictions belonging to a specific batch upload.
+    """
+    count = Prediction.query.filter_by(batch_id=batch_id).count()
+
+    if count == 0:
+        return jsonify({'error': 'Batch not found'}), 404
+
+    # Delete alerts linked to these predictions first
+    from models.database import Alert
+    pred_ids = [p.id for p in Prediction.query.filter_by(batch_id=batch_id).all()]
+    Alert.query.filter(Alert.prediction_id.in_(pred_ids)).delete(synchronize_session=False)
+
+    # Delete predictions
+    Prediction.query.filter_by(batch_id=batch_id).delete()
+    db.session.commit()
+
+    return jsonify({
+        'message':  f'Batch {batch_id} deleted',
+        'deleted':  count
     }), 200

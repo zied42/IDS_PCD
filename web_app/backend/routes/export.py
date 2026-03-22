@@ -21,8 +21,11 @@ def export_report():
     fmt       = request.args.get('format', 'csv').lower()
     date_from = request.args.get('from')
     date_to   = request.args.get('to')
+    batch_id  = request.args.get('batch_id')
 
     query = Prediction.query
+    if batch_id:
+        query = query.filter(Prediction.batch_id == batch_id)
     if date_from:
         query = query.filter(Prediction.timestamp >= date_from)
     if date_to:
