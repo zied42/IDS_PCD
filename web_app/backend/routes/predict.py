@@ -51,11 +51,10 @@ def predict():
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
-    src_ip   = data.pop('src_ip',   None) or data.pop('Src IP',   None)
-    dst_ip   = data.pop('dst_ip',   None) or data.pop('Dst IP',   None)
-    src_port = data.pop('src_port', None) or data.pop('Src Port', None)
-    dst_port = data.pop('dst_port', None) or data.pop('Dst Port', None)
-
+    src_ip = data.pop('src_ip', None) or data.pop('Src IP', None)
+    dst_ip = data.pop('dst_ip', None) or data.pop('Dst IP', None)
+    src_port = data.get('src_port') or data.get('Src Port')  # ← get not pop
+    dst_port = data.get('dst_port') or data.get('Dst Port')  # ← get not pop # ← removes 'Dst Port'!
     try:
         result = predict_single(data)
     except ValueError as e:
