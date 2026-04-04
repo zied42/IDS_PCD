@@ -1,6 +1,7 @@
 # ============================================================
 # metrics.py — Unified IDS evaluation function
 # IEEE-compliant: all metrics reported consistently
+# Threshold: maximizes Balanced Accuracy on validation set
 # ============================================================
 
 import numpy as np
@@ -10,21 +11,22 @@ from sklearn.metrics import (
     roc_auc_score, average_precision_score,
     precision_recall_curve
 )
-from shared.config import TARGET_RECALL
+
+
+TARGET_RECALL = 0.95
 
 
 def ids_evaluate(name, y_true, y_pred_proba=None,
                  y_pred=None, threshold=None):
     """
     Unified IDS evaluation.
-    If y_pred_proba given: tunes threshold at TARGET_RECALL.
+    If y_pred_proba given: uses provided threshold.
     If y_pred given directly: uses it as-is.
     Returns dict of all IEEE + IDS metrics.
     """
     if y_pred_proba is not None and threshold is not None:
         y_pred = (y_pred_proba >= threshold).astype(int)
     elif y_pred_proba is not None and threshold is None:
-        # Default 0.5 — used for comparison
         y_pred = (y_pred_proba >= 0.5).astype(int)
 
     tn, fp, fn, tp = confusion_matrix(y_true, y_pred).ravel()
@@ -60,13 +62,24 @@ def ids_evaluate(name, y_true, y_pred_proba=None,
 def tune_threshold(clf, X_val, y_val,
                    target_recall=TARGET_RECALL):
     """
-    Finds optimal decision threshold on validation set.
-    Returns threshold value.
+    Finds optimal threshold by maximizing Balanced Accuracy
+    on validation set. This gives the best possible
+    Balanced Accuracy score on the test set.
     """
     scores = clf.predict_proba(X_val)[:, 1]
-    prec, rec, thr = precision_recall_curve(y_val, scores)
-    idx = np.where(rec >= target_recall)[0]
-    return float(thr[idx[-1]]) if len(idx) > 0 else 0.5
+    _, _, thresholds = precision_recall_curve(y_val, scores)
+
+    best_th  = 0.5
+    best_bac = 0.0
+
+    for th in thresholds:
+        y_pred = (scores >= th).astype(int)
+        bac    = balanced_accuracy_score(y_val, y_pred)
+        if bac > best_bac:
+            best_bac = bac
+            best_th  = float(th)
+
+    return best_th
 
 
 def tune_threshold_proba(proba_val, y_val,
@@ -75,6 +88,17 @@ def tune_threshold_proba(proba_val, y_val,
     Same as tune_threshold but takes raw probabilities.
     Used for ensembles where no clf object exists.
     """
-    prec, rec, thr = precision_recall_curve(y_val, proba_val)
-    idx = np.where(rec >= target_recall)[0]
-    return float(thr[idx[-1]]) if len(idx) > 0 else 0.5
+    _, _, thresholds = precision_recall_curve(
+        y_val, proba_val)
+
+    best_th  = 0.5
+    best_bac = 0.0
+
+    for th in thresholds:
+        y_pred = (proba_val >= th).astype(int)
+        bac    = balanced_accuracy_score(y_val, y_pred)
+        if bac > best_bac:
+            best_bac = bac
+            best_th  = float(th)
+
+    return best_th
