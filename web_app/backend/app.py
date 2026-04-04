@@ -11,6 +11,7 @@ from routes.alerts     import alerts_bp
 from routes.stats      import stats_bp
 from routes.model_info import model_bp
 from routes.export     import export_bp
+from routes.settings   import settings_bp
 
 
 def create_app():
@@ -21,12 +22,13 @@ def create_app():
     JWTManager(app)
     db.init_app(app)
 
-    app.register_blueprint(auth_bp,    url_prefix='/api/auth')
-    app.register_blueprint(predict_bp, url_prefix='/api')
-    app.register_blueprint(alerts_bp,  url_prefix='/api')
-    app.register_blueprint(stats_bp,   url_prefix='/api/stats')
-    app.register_blueprint(model_bp,   url_prefix='/api/model')
-    app.register_blueprint(export_bp,  url_prefix='/api/export')
+    app.register_blueprint(auth_bp,      url_prefix='/api/auth')
+    app.register_blueprint(predict_bp,   url_prefix='/api')
+    app.register_blueprint(alerts_bp,    url_prefix='/api')
+    app.register_blueprint(stats_bp,     url_prefix='/api/stats')
+    app.register_blueprint(model_bp,     url_prefix='/api/model')
+    app.register_blueprint(export_bp,    url_prefix='/api/export')
+    app.register_blueprint(settings_bp,  url_prefix='/api')
 
     with app.app_context():
         db.create_all()

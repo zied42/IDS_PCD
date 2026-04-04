@@ -24,6 +24,7 @@ class Prediction(db.Model):
     model_used    = db.Column(db.String(50),  nullable=False)
     needs_review  = db.Column(db.Boolean,     default=False)
     batch_id      = db.Column(db.String(36),  nullable=True, index=True)
+    batch_filename= db.Column(db.String(255), nullable=True)
     features_json = db.Column(db.Text, nullable=True)
 
     # Raw 34 features stored as JSON (for SHAP explanation later)

@@ -130,6 +130,7 @@ def predict_batch_endpoint():
 
     model_name = get_model_name() or 'xgboost'
     batch_id   = str(uuid.uuid4())  # one unique ID for the whole upload
+    filename   = file.filename       # save original filename
 
     for _, row in result_df.iterrows():
         is_attack     = row['prediction'] == 'Attack'
@@ -138,17 +139,18 @@ def predict_batch_endpoint():
         ) if is_attack else None
 
         pred = Prediction(
-            src_ip        = row.get('Src IP') or row.get('src_ip'),
-            dst_ip        = row.get('Dst IP') or row.get('dst_ip'),
-            src_port      = int(row['Src Port']) if 'Src Port' in row else None,
-            dst_port      = int(row['Dst Port']) if 'Dst Port' in row else None,
-            protocol      = int(row.get('Protocol', 0)),
-            prediction    = row['prediction'],
-            confidence    = row['confidence'] / 100,
-            model_used    = model_name,
-            needs_review  = bool(row['needs_review']),
-            features_json = features_json,
-            batch_id      = batch_id    # ← tag every row with the batch ID
+            src_ip         = row.get('Src IP') or row.get('src_ip'),
+            dst_ip         = row.get('Dst IP') or row.get('dst_ip'),
+            src_port       = int(row['Src Port']) if 'Src Port' in row else None,
+            dst_port       = int(row['Dst Port']) if 'Dst Port' in row else None,
+            protocol       = int(row.get('Protocol', 0)),
+            prediction     = row['prediction'],
+            confidence     = row['confidence'] / 100,
+            model_used     = model_name,
+            needs_review   = bool(row['needs_review']),
+            features_json  = features_json,
+            batch_id       = batch_id,
+            batch_filename = filename
         )
         db.session.add(pred)
         db.session.flush()
@@ -220,6 +222,12 @@ def get_batches():
         func.min(Prediction.timestamp).desc()
     ).all()
 
+    # Get filenames for each batch
+    batch_filenames = {}
+    for row in rows:
+        fn = Prediction.query.filter_by(batch_id=row.batch_id).first()
+        batch_filenames[row.batch_id] = fn.batch_filename if fn and fn.batch_filename else 'upload.csv'
+
     return jsonify([
         {
             'batch_id':    row.batch_id,
@@ -227,7 +235,8 @@ def get_batches():
             'total':       row.total,
             'attacks':     int(row.attacks or 0),
             'benign':      int(row.benign  or 0),
-            'model_used':  row.model_used
+            'model_used':  row.model_used,
+            'filename':    batch_filenames.get(row.batch_id, 'upload.csv')
         }
         for row in rows
     ]), 200
@@ -255,4 +264,64 @@ def delete_batch(batch_id):
     return jsonify({
         'message':  f'Batch {batch_id} deleted',
         'deleted':  count
+    }), 200
+
+
+# ── Batch analysis status (compatibility) ─────────────────────────────────────
+@predict_bp.route('/analyze/status/<batch_id>', methods=['GET'])
+@jwt_required()
+def analyze_status(batch_id):
+    """
+    GET /api/analyze/status/<batch_id>
+    Our batch processing is synchronous, so this always returns 'completed'.
+    Endpoint exists for compatibility with the Angular frontend.
+    """
+    count = Prediction.query.filter_by(batch_id=batch_id).count()
+    if count == 0:
+        return jsonify({'error': 'Batch not found'}), 404
+    return jsonify({
+        'jobId':    batch_id,
+        'status':   'completed',
+        'progress': 100,
+        'total':    count
+    }), 200
+
+
+# ── Batch analysis results ────────────────────────────────────────────────────
+@predict_bp.route('/analyze/results/<batch_id>', methods=['GET'])
+@jwt_required()
+def analyze_results(batch_id):
+    """
+    GET /api/analyze/results/<batch_id>
+    Returns full results for a batch upload.
+    """
+    predictions = Prediction.query.filter_by(batch_id=batch_id).all()
+    if not predictions:
+        return jsonify({'error': 'Batch not found'}), 404
+
+    attacks      = sum(1 for p in predictions if p.prediction == 'Attack')
+    benign       = len(predictions) - attacks
+    needs_review = sum(1 for p in predictions if p.needs_review)
+
+    return jsonify({
+        'jobId':        batch_id,
+        'status':       'completed',
+        'total':        len(predictions),
+        'attacks':      attacks,
+        'benign':       benign,
+        'needs_review': needs_review,
+        'results': [
+            {
+                'id':           p.id,
+                'timestamp':    p.timestamp.isoformat(),
+                'src_ip':       p.src_ip,
+                'dst_ip':       p.dst_ip,
+                'protocol':     p.protocol,
+                'prediction':   p.prediction,
+                'confidence':   round(p.confidence * 100, 2),
+                'model_used':   p.model_used,
+                'needs_review': p.needs_review
+            }
+            for p in predictions
+        ]
     }), 200

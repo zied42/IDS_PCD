@@ -38,6 +38,11 @@ def live_stats():
     # Open alerts
     open_alerts = Alert.query.filter_by(status='open').count()
 
+    # Average confidence (today)
+    avg_conf = db.session.query(
+        func.avg(Prediction.confidence)
+    ).filter(Prediction.timestamp >= today_start).scalar()
+
     attack_rate_today     = round(today_attacks / today_total * 100, 1) if today_total else 0
     attack_rate_yesterday = round(yesterday_attacks / yesterday_total * 100, 1) if yesterday_total else 0
 
@@ -53,7 +58,8 @@ def live_stats():
             'attacks':     yesterday_attacks,
             'attack_rate': attack_rate_yesterday
         },
-        'open_alerts': open_alerts
+        'open_alerts':   open_alerts,
+        'avgConfidence': round(float(avg_conf or 0) * 100, 1)
     }), 200
 
 
@@ -85,3 +91,32 @@ def hourly_stats():
         }
         for row in rows
     ]), 200
+
+
+@stats_bp.route('/distribution', methods=['GET'])
+@jwt_required()
+def distribution():
+    """GET /api/stats/distribution — benign vs attack pie chart data."""
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    total   = Prediction.query.filter(Prediction.timestamp >= today_start).count()
+    attacks = Prediction.query.filter(
+        Prediction.timestamp >= today_start,
+        Prediction.prediction == 'Attack'
+    ).count()
+    benign = total - attacks
+
+    attack_pct = round(attacks / total * 100, 1) if total else 0
+    benign_pct = round(benign / total * 100, 1) if total else 0
+
+    return jsonify({
+        'total':      total,
+        'attacks':    attacks,
+        'benign':     benign,
+        'attack_pct': attack_pct,
+        'benign_pct': benign_pct,
+        'distribution': [
+            {'label': 'Benign', 'value': benign,  'color': '#22c55e'},
+            {'label': 'Attack', 'value': attacks, 'color': '#ef4444'},
+        ]
+    }), 200

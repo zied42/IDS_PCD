@@ -1,0 +1,63 @@
+# IDE / OS files
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+
+# Python cache / env
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.env
+.venv/
+venv/
+web_app/backend/venv/
+web_app/backend/venv311/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Node.js / Angular
+node_modules/
+.angular/
+dist/
+.next/
+.snowflake/
+.v0-trash/
+.vercel/
+next.user-config.*
+
+# DATASETS (Ignore all CSV and large data files)
+archive/
+*.csv
+*.parquet
+*.zip
+*.json
+!test_payload.json
+
+# TRAINED MODELS
+trained_models/
+dl_corr_drop/
+ml_corr_drop/
+*.h5
+*.pt
+*.pth
+*.joblib
+*.pkl
+*.onnx
+*.keras
+
+# Logs & temp
+logs/
+*.log
+*.tmp
+
+# Media (Ignore all images since they are often large assets or generated)
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.svg
+*.webp

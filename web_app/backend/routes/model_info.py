@@ -3,8 +3,10 @@ from flask_jwt_extended import jwt_required, get_jwt
 from models.database import db, MLModel
 from utils.ml_loader import (
     load_model, get_model_name, get_metadata,
-    get_model_type, get_available_models, FEATURE_COLUMNS
+    get_model_type, get_available_models, FEATURE_COLUMNS, MODELS
 )
+import os
+from datetime import datetime
 
 model_bp = Blueprint('model', __name__)
 
@@ -17,6 +19,17 @@ def model_info():
     if not meta:
         return jsonify({'error': 'No model loaded'}), 503
 
+    # Get trained date from model file modification time
+    model_name = get_model_name()
+    trained_date = None
+    if model_name and model_name in MODELS:
+        model_path = MODELS[model_name]['model_path']
+        try:
+            mtime = os.path.getmtime(model_path)
+            trained_date = datetime.fromtimestamp(mtime).strftime('%Y-%m-%d')
+        except OSError:
+            trained_date = '2026-03-01'  # fallback
+
     return jsonify({
         'model_name':   get_model_name(),
         'model_type':   get_model_type(),
@@ -27,7 +40,8 @@ def model_info():
         'benign_recall':round(float(meta['metrics']['benign_recall']) * 100, 2),
         'n_features':   meta.get('n_features', 34),
         'features':     FEATURE_COLUMNS,
-        'available_models': get_available_models()
+        'available_models': get_available_models(),
+        'trainedDate':  trained_date
     }), 200
 
 
