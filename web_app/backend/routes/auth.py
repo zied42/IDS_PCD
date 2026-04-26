@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, jwt_required
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 from models.database import db, User
@@ -42,12 +42,18 @@ def login():
 
 
 @auth_bp.route('/register', methods=['POST'])
+@jwt_required()
 def register():
     """
     POST /api/auth/register
     Body: { "username": "zied", "password": "1234", "role": "analyst" }
     Roles: admin | analyst | viewer
     """
+    from flask_jwt_extended import get_jwt
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admin access required to create users'}), 403
+
     data = request.get_json()
     if not data:
         return jsonify({'error': 'No data provided'}), 400

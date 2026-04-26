@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from werkzeug.security import check_password_hash, generate_password_hash
-from models.database import db, User
+from models.database import db, User, UserSettings
 
 settings_bp = Blueprint('settings', __name__)
 
@@ -15,12 +15,21 @@ def get_settings():
     """
     username = get_jwt_identity()
     user = User.query.filter_by(username=username).first_or_404()
+    
+    settings = UserSettings.query.filter_by(user_id=user.id).first()
+    if not settings:
+        settings = UserSettings(user_id=user.id)
+        db.session.add(settings)
+        db.session.commit()
+
     return jsonify({
         'username':      user.username,
         'role':          user.role,
-        'theme':         'dark',
-        'language':      'en',
-        'notifications': True
+        'theme':         settings.theme,
+        'language':      settings.language,
+        'notifications': settings.notifications,
+        'auto_block_enabled': settings.auto_block_enabled,
+        'auto_block_threshold': round(settings.auto_block_threshold * 100)
     }), 200
 
 
@@ -29,15 +38,36 @@ def get_settings():
 def update_settings():
     """
     PUT /api/settings
-    Body: { "theme": "dark", "language": "en", "notifications": true }
+    Body: { "theme": "dark", "language": "en", "notifications": true, "auto_block_enabled": true, "auto_block_threshold": 90 }
     """
+    username = get_jwt_identity()
+    user = User.query.filter_by(username=username).first_or_404()
     data = request.get_json()
+    
     if not data:
         return jsonify({'error': 'No data provided'}), 400
 
+    settings = UserSettings.query.filter_by(user_id=user.id).first()
+    if not settings:
+        settings = UserSettings(user_id=user.id)
+        db.session.add(settings)
+
+    if 'theme' in data:
+        settings.theme = data['theme']
+    if 'language' in data:
+        settings.language = data['language']
+    if 'notifications' in data:
+        settings.notifications = bool(data['notifications'])
+    if 'auto_block_enabled' in data:
+        settings.auto_block_enabled = bool(data['auto_block_enabled'])
+    if 'auto_block_threshold' in data:
+        settings.auto_block_threshold = float(data['auto_block_threshold']) / 100.0
+
+    db.session.commit()
+
     return jsonify({
         'message':  'Settings updated',
-        'settings': data
+        'settings': settings.to_dict()
     }), 200
 
 

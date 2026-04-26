@@ -132,3 +132,55 @@ class MLModel(db.Model):
             'f1_macro':     self.f1_macro,
             'is_active':    self.is_active
         }
+
+
+# ── 6. Blocked IPs (auto-blocked on high-confidence attacks) ─────────────────
+class BlockedIP(db.Model):
+    __tablename__ = 'blocked_ips'
+
+    id            = db.Column(db.Integer,    primary_key=True)
+    ip_address    = db.Column(db.String(45), nullable=False, index=True)
+    reason        = db.Column(db.String(255),nullable=False)
+    confidence    = db.Column(db.Float,      nullable=True)
+    blocked_at    = db.Column(db.DateTime,   default=datetime.utcnow)
+    auto_blocked  = db.Column(db.Boolean,    default=True)     # True = system, False = manual
+    status        = db.Column(db.String(20), default='active') # active | unblocked
+    prediction_id = db.Column(db.Integer,    nullable=True)
+    unblocked_at  = db.Column(db.DateTime,   nullable=True)
+    attack_count  = db.Column(db.Integer,    default=1)        # how many attacks from this IP
+
+    def to_dict(self):
+        return {
+            'id':            self.id,
+            'ip_address':    self.ip_address,
+            'reason':        self.reason,
+            'confidence':    round(self.confidence * 100, 2) if self.confidence else None,
+            'blocked_at':    self.blocked_at.isoformat() if self.blocked_at else None,
+            'auto_blocked':  self.auto_blocked,
+            'status':        self.status,
+            'prediction_id': self.prediction_id,
+            'unblocked_at':  self.unblocked_at.isoformat() if self.unblocked_at else None,
+            'attack_count':  self.attack_count
+        }
+
+
+# ── 7. User Settings (persistent preferences) ────────────────────────────────
+class UserSettings(db.Model):
+    __tablename__ = 'user_settings'
+
+    id            = db.Column(db.Integer,    primary_key=True)
+    user_id       = db.Column(db.Integer,    db.ForeignKey('users.id'), unique=True, nullable=False)
+    theme         = db.Column(db.String(20), default='dark')
+    language      = db.Column(db.String(10), default='en')
+    notifications = db.Column(db.Boolean,    default=True)
+    auto_block_enabled   = db.Column(db.Boolean, default=True)
+    auto_block_threshold = db.Column(db.Float,   default=0.90)  # confidence threshold for auto-blocking
+
+    def to_dict(self):
+        return {
+            'theme':                self.theme,
+            'language':             self.language,
+            'notifications':        self.notifications,
+            'auto_block_enabled':   self.auto_block_enabled,
+            'auto_block_threshold': round(self.auto_block_threshold * 100)
+        }

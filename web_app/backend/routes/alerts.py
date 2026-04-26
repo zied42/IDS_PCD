@@ -69,6 +69,30 @@ def update_alert(alert_id):
         return jsonify({'error': f'status must be one of {allowed}'}), 400
 
     alert.status = data['status']
+    
+    # Auto-unblock IP if alert is resolved and no other open alerts exist for this IP
+    if alert.status == 'resolved' and alert.src_ip:
+        from models.database import BlockedIP
+        from datetime import datetime
+        
+        # Check if there are any other open/reviewed alerts for this IP
+        other_active_alerts = Alert.query.filter(
+            Alert.src_ip == alert.src_ip,
+            Alert.status.in_(['open', 'reviewed']),
+            Alert.id != alert.id
+        ).count()
+        
+        if other_active_alerts == 0:
+            # Unblock the IP since all alerts for it are now resolved
+            blocked_ip = BlockedIP.query.filter_by(
+                ip_address=alert.src_ip, 
+                status='active'
+            ).first()
+            
+            if blocked_ip:
+                blocked_ip.status = 'unblocked'
+                blocked_ip.unblocked_at = datetime.utcnow()
+
     db.session.commit()
 
     return jsonify({

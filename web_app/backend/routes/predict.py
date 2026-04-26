@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from models.database import db, Prediction
 from utils.ml_loader import predict_single, predict_batch, get_model_name, FEATURE_COLUMNS
-from utils.alert_helper import create_alert_if_needed
+from utils.alert_helper import create_alert_if_needed, auto_block_ip_if_needed
 
 predict_bp = Blueprint('predict', __name__)
 
@@ -42,8 +42,14 @@ def _append_csv(pred):
 
 def _cleanup_old_predictions():
     """Delete MySQL rows older than 7 days — CSV keeps full history."""
+    from models.database import Alert
     cutoff = datetime.utcnow() - timedelta(days=7)
-    Prediction.query.filter(Prediction.timestamp < cutoff).delete()
+    
+    old_preds = Prediction.query.filter(Prediction.timestamp < cutoff).with_entities(Prediction.id).all()
+    if old_preds:
+        pred_ids = [p[0] for p in old_preds]
+        Alert.query.filter(Alert.prediction_id.in_(pred_ids)).delete(synchronize_session=False)
+        Prediction.query.filter(Prediction.id.in_(pred_ids)).delete(synchronize_session=False)
 
 
 # ── Single prediction ─────────────────────────────────────────────────────────
@@ -91,6 +97,10 @@ def predict():
     alert = create_alert_if_needed(pred)
     if alert:
         db.session.add(alert)
+
+    blocked = auto_block_ip_if_needed(pred)
+    if blocked:
+        db.session.add(blocked)
 
     _cleanup_old_predictions()
     db.session.commit()
@@ -158,6 +168,10 @@ def predict_batch_endpoint():
         alert = create_alert_if_needed(pred)
         if alert:
             db.session.add(alert)
+
+        blocked = auto_block_ip_if_needed(pred)
+        if blocked:
+            db.session.add(blocked)
 
         _append_csv(pred)
 
