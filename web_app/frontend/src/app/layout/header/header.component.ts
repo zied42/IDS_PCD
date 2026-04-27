@@ -162,6 +162,7 @@ export class HeaderComponent {
     const titles: Record<string, string> = {
       '/live-monitor': 'Live Monitor',
       '/alerts': 'Alerts',
+      '/blocked-ips': 'Blocked IPs',
       '/statistics': 'Statistics',
       '/upload': 'Upload & Analyze',
       '/model-info': 'Model Info',

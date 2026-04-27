@@ -8,7 +8,7 @@ class Config:
     # MySQL
     SQLALCHEMY_DATABASE_URI = os.environ.get(
         'DATABASE_URL',
-        'mysql+pymysql://root:root@localhost:3306/ids_platform'
+        'mysql+pymysql://root:panzer@localhost:3306/ids_platform'
     )
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 

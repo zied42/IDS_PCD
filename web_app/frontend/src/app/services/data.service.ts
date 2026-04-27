@@ -27,6 +27,20 @@ export interface Alert {
   prediction_id: number;
 }
 
+export interface BlockedIP {
+  id: number;
+  ip_address: string;
+  reason: string;
+  confidence: number | null;
+  blocked_at: string;
+  auto_blocked: boolean;
+  status: 'active' | 'unblocked';
+  prediction_id: number | null;
+  unblocked_at: string | null;
+  attack_count: number;
+  firewall_blocked: boolean;
+}
+
 export interface LiveStats {
   today: {
     total: number;
@@ -93,4 +107,21 @@ export class DataService {
   // Settings
   getSettings()             { return this.http.get<any>(`${this.api}/api/settings`); }
   updateSettings(body: any) { return this.http.put<any>(`${this.api}/api/settings`, body); }
-}
+
+  // Blocked IPs
+  getBlockedIPs(params?: any) {
+    return this.http.get<any>(`${this.api}/api/blocked-ips`, { params });
+  }
+  getBlockedIPsSummary() {
+    return this.http.get<any>(`${this.api}/api/blocked-ips/summary`);
+  }
+  blockIP(ip_address: string, reason?: string) {
+    return this.http.post<any>(`${this.api}/api/blocked-ips`, { ip_address, reason });
+  }
+  unblockIP(id: number) {
+    return this.http.delete<any>(`${this.api}/api/blocked-ips/${id}`);
+  }
+  checkIP(ip: string) {
+    return this.http.get<any>(`${this.api}/api/blocked-ips/check/${ip}`);
+  }
+}

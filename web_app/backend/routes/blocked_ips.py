@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from datetime import datetime
 from models.database import db, BlockedIP
+from utils.alert_helper import _block_ip_in_firewall, _unblock_ip_in_firewall
 
 blocked_ips_bp = Blueprint('blocked_ips', __name__)
 
@@ -33,16 +34,18 @@ def get_blocked_ips():
     total_unblocked= BlockedIP.query.filter_by(status='unblocked').count()
     auto_blocked   = BlockedIP.query.filter_by(status='active', auto_blocked=True).count()
     manual_blocked = BlockedIP.query.filter_by(status='active', auto_blocked=False).count()
+    firewall_count = BlockedIP.query.filter_by(status='active', firewall_blocked=True).count()
 
     return jsonify({
         'total':        paged.total,
         'page':         paged.page,
         'pages':        paged.pages,
         'summary': {
-            'active':        total_active,
-            'unblocked':     total_unblocked,
-            'auto_blocked':  auto_blocked,
-            'manual_blocked':manual_blocked
+            'active':           total_active,
+            'unblocked':        total_unblocked,
+            'auto_blocked':     auto_blocked,
+            'manual_blocked':   manual_blocked,
+            'firewall_blocked': firewall_count
         },
         'blocked_ips':  [ip.to_dict() for ip in paged.items]
     }), 200
@@ -70,13 +73,17 @@ def block_ip():
             'blocked_ip': existing.to_dict()
         }), 409
 
+    # Also block in Windows Firewall
+    firewall_ok = _block_ip_in_firewall(ip_addr)
+
     blocked = BlockedIP(
-        ip_address   = ip_addr,
-        reason       = data.get('reason', 'Manually blocked by admin'),
-        confidence   = None,
-        auto_blocked = False,
-        status       = 'active',
-        attack_count = 0
+        ip_address       = ip_addr,
+        reason           = data.get('reason', 'Manually blocked by admin'),
+        confidence       = None,
+        auto_blocked     = False,
+        status           = 'active',
+        attack_count     = 0,
+        firewall_blocked = firewall_ok
     )
     db.session.add(blocked)
     db.session.commit()
@@ -92,15 +99,20 @@ def block_ip():
 def unblock_ip(block_id):
     """
     DELETE /api/blocked-ips/<id>
-    Unblock an IP address (sets status to 'unblocked').
+    Unblock an IP address (sets status to 'unblocked') and removes firewall rule.
     """
     blocked = BlockedIP.query.get_or_404(block_id)
 
     if blocked.status == 'unblocked':
         return jsonify({'error': 'IP is already unblocked'}), 400
 
+    # Remove from Windows Firewall
+    if blocked.firewall_blocked:
+        _unblock_ip_in_firewall(blocked.ip_address)
+
     blocked.status = 'unblocked'
     blocked.unblocked_at = datetime.utcnow()
+    blocked.firewall_blocked = False
     db.session.commit()
 
     return jsonify({

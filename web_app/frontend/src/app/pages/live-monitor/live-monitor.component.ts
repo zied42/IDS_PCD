@@ -1,6 +1,7 @@
 import { Component, OnInit, OnDestroy, signal, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DataService, FlowRecord } from '../../services/data.service';
+import { NotificationService } from '../../services/notification.service';
 
 @Component({
   selector: 'app-live-monitor',
@@ -48,15 +49,16 @@ import { DataService, FlowRecord } from '../../services/data.service';
           </div>
         </div>
         
-        <div class="stat-card">
-          <div class="stat-icon orange">
+        <div class="stat-card firewall-card">
+          <div class="stat-icon shield">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M9 12l2 2 4-4"/>
             </svg>
           </div>
           <div class="stat-content">
-            <span class="stat-value">{{ stats().today.attack_rate}}%</span>
-            <span class="stat-label">Attack Rate</span>
+            <span class="stat-value">{{ blockedCount() }}</span>
+            <span class="stat-label">IPs Bloquées (Firewall)</span>
           </div>
         </div>
       </div>
@@ -90,15 +92,29 @@ import { DataService, FlowRecord } from '../../services/data.service';
                 <th>Protocol</th>
                 <th>Prediction</th>
                 <th>Confidence</th>
+                <th>Firewall</th>
                 <th>Status</th>
               </tr>
             </thead>
             <tbody>
               @for (flow of paginatedFlows(); track flow.id) {
-                <tr [class.row-needs-review]="flow.needs_review">
+                <tr [class.row-needs-review]="flow.needs_review" 
+                    [class.row-blocked]="isIPBlocked(flow.src_ip) && flow.prediction === 'Attack'">
                   <td class="text-muted">#{{ flow.id }}</td>
                   <td>{{ formatDate(flow.timestamp) }}</td>
-                  <td><code class="ip-code">{{ flow.src_ip }}</code></td>
+                  <td>
+                    <div class="ip-cell">
+                      <code class="ip-code" [class.ip-blocked]="isIPBlocked(flow.src_ip)">{{ flow.src_ip }}</code>
+                      @if (isIPBlocked(flow.src_ip)) {
+                        <span class="blocked-badge">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          </svg>
+                          BLOQUÉE
+                        </span>
+                      }
+                    </div>
+                  </td>
                   <td><code class="ip-code">{{ flow.dst_ip}}</code></td>
                   <td><span class="protocol-badge">{{ getProtocolName(flow.protocol) }}</span></td>
                   <td>
@@ -124,6 +140,21 @@ import { DataService, FlowRecord } from '../../services/data.service';
                         [class.low]="flow.confidence < 70"
                       >{{ flow.confidence }}%</span>
                     </div>
+                  </td>
+                  <td>
+                    @if (isIPBlocked(flow.src_ip) && flow.prediction === 'Attack') {
+                      <span class="badge badge-firewall">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          <path d="M9 12l2 2 4-4"/>
+                        </svg>
+                        Système Bloqué
+                      </span>
+                    } @else if (flow.prediction === 'Attack') {
+                      <span class="badge badge-danger-outline">Non bloquée</span>
+                    } @else {
+                      <span class="badge badge-neutral">—</span>
+                    }
                   </td>
                   <td>
                       <span class="badge" 
@@ -196,6 +227,11 @@ import { DataService, FlowRecord } from '../../services/data.service';
       border: 1px solid var(--border-color);
       border-radius: var(--radius-lg);
     }
+
+    .firewall-card {
+      border-color: rgba(239, 68, 68, 0.3);
+      background: linear-gradient(135deg, var(--bg-secondary), rgba(239, 68, 68, 0.05));
+    }
     
     .stat-icon {
       display: flex;
@@ -224,6 +260,11 @@ import { DataService, FlowRecord } from '../../services/data.service';
     .stat-icon.orange {
       background-color: rgba(249, 115, 22, 0.15);
       color: var(--color-orange);
+    }
+
+    .stat-icon.shield {
+      background-color: rgba(239, 68, 68, 0.2);
+      color: var(--color-attack);
     }
     
     .stat-content {
@@ -285,6 +326,12 @@ import { DataService, FlowRecord } from '../../services/data.service';
       font-size: 0.875rem;
       color: var(--text-secondary);
     }
+
+    .ip-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
     
     .ip-code {
       font-family: 'SF Mono', Monaco, monospace;
@@ -292,6 +339,62 @@ import { DataService, FlowRecord } from '../../services/data.service';
       padding: 0.125rem 0.375rem;
       background-color: var(--bg-tertiary);
       border-radius: var(--radius-sm);
+    }
+
+    .ip-code.ip-blocked {
+      background-color: rgba(239, 68, 68, 0.2);
+      color: var(--color-attack);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+    }
+
+    .blocked-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.125rem 0.5rem;
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.25), rgba(185, 28, 28, 0.25));
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      border-radius: 4px;
+      animation: pulseGlow 2s infinite;
+    }
+
+    @keyframes pulseGlow {
+      0%, 100% { box-shadow: 0 0 4px rgba(239, 68, 68, 0.3); }
+      50% { box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
+    }
+
+    .badge-firewall {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(185, 28, 28, 0.2));
+      color: #ef4444;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      font-weight: 600;
+    }
+
+    .badge-danger-outline {
+      background: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+    }
+
+    .badge-neutral {
+      background: transparent;
+      color: var(--text-muted);
+    }
+
+    .row-blocked {
+      border-left: 3px solid var(--color-attack) !important;
+      background-color: rgba(239, 68, 68, 0.05) !important;
+    }
+
+    .row-blocked:hover {
+      background-color: rgba(239, 68, 68, 0.1) !important;
     }
     
     .protocol-badge {
@@ -384,6 +487,11 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
   flows = signal<any[]>([]);
   totalFlows = signal(0);
 
+  // Blocked IPs tracking
+  blockedIPs = signal<Set<string>>(new Set());
+  blockedCount = signal(0);
+  private knownBlockedIPs = new Set<string>();
+
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
 
   totalPages = computed(() => Math.ceil(this.totalFlows() / this.pageSize));
@@ -401,11 +509,15 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
     return pages;
   });
 
-  constructor(private dataService: DataService) {}
+  constructor(
+    private dataService: DataService,
+    private notificationService: NotificationService
+  ) {}
 
   ngOnInit(): void {
     this.loadStats();
     this.loadFlows();
+    this.loadBlockedIPs();
     this.startAutoRefresh();
   }
 
@@ -435,10 +547,39 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
     });
   }
 
+  private loadBlockedIPs(): void {
+    this.dataService.getBlockedIPs({ status: 'active', per_page: 500 }).subscribe({
+      next: (res) => {
+        const ips = new Set<string>(res.blocked_ips.map((b: any) => b.ip_address));
+        
+        // Detect newly blocked IPs and show toast notification
+        ips.forEach(ip => {
+          if (!this.knownBlockedIPs.has(ip)) {
+            // Check if this IP has firewall_blocked = true
+            const blockedEntry = res.blocked_ips.find((b: any) => b.ip_address === ip);
+            if (blockedEntry?.firewall_blocked) {
+              this.notificationService.firewallBlocked(ip);
+            }
+          }
+        });
+        
+        this.knownBlockedIPs = new Set(ips);
+        this.blockedIPs.set(ips);
+        this.blockedCount.set(res.summary?.firewall_blocked || res.summary?.active || ips.size);
+      },
+      error: (err) => console.error('Blocked IPs error', err)
+    });
+  }
+
+  isIPBlocked(ip: string): boolean {
+    return this.blockedIPs().has(ip);
+  }
+
   private startAutoRefresh(): void {
     this.refreshInterval = setInterval(() => {
       this.loadStats();
       this.loadFlows(this.currentPage());
+      this.loadBlockedIPs();
     }, 3000);
   }
 

@@ -25,6 +25,10 @@ export const routes: Routes = [
         loadComponent: () => import('./pages/alerts/alerts.component').then(m => m.AlertsComponent)
       },
       {
+        path: 'blocked-ips',
+        loadComponent: () => import('./pages/blocked-ips/blocked-ips.component').then(m => m.BlockedIPsComponent)
+      },
+      {
         path: 'statistics',
         loadComponent: () => import('./pages/statistics/statistics.component').then(m => m.StatisticsComponent)
       },

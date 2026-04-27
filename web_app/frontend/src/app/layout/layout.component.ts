@@ -3,11 +3,12 @@ import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
 import { SidebarComponent } from './sidebar/sidebar.component';
 import { HeaderComponent } from './header/header.component';
+import { ToastContainerComponent } from './toast-container/toast-container.component';
 
 @Component({
   selector: 'app-layout',
   standalone: true,
-  imports: [CommonModule, RouterModule, SidebarComponent, HeaderComponent],
+  imports: [CommonModule, RouterModule, SidebarComponent, HeaderComponent, ToastContainerComponent],
   template: `
     <div class="layout">
       <app-sidebar></app-sidebar>
@@ -18,6 +19,7 @@ import { HeaderComponent } from './header/header.component';
         </main>
       </div>
     </div>
+    <app-toast-container></app-toast-container>
   `,
   styles: [`
     .layout {

@@ -9,14 +9,20 @@ Make sure Flask is running first:
     python app.py
 """
 import sys
+import os
 import time
 import random
 import requests
 import pandas as pd
 
+# Fix Windows console encoding for emoji output
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+
 # ── Config ────────────────────────────────────────────────────────────────────
 API_URL    = 'http://localhost:5000'
-CSV_PATH   = '../../archive/full_df_binary_labels.csv'
+CSV_PATH   = r'C:\Users\hechem\Desktop\pcd\archive\full_df_binary_labels.csv'
 DELAY      = 0.3    # seconds between each row (lower = faster)
 N_ROWS     = 500    # how many rows to simulate (None = full dataset)
 USERNAME   = 'admin'

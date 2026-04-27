@@ -41,6 +41,16 @@ import { RouterModule } from '@angular/router';
           <span class="nav-label">Alerts</span>
         </a>
 
+        <a routerLink="/blocked-ips" routerLinkActive="active" class="nav-item">
+          <span class="nav-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <path d="M9 12l2 2 4-4"/>
+            </svg>
+          </span>
+          <span class="nav-label">Blocked IPs</span>
+        </a>
+
         <a routerLink="/statistics" routerLinkActive="active" class="nav-item">
           <span class="nav-icon">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

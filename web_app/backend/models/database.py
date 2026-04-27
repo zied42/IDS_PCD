@@ -145,22 +145,24 @@ class BlockedIP(db.Model):
     blocked_at    = db.Column(db.DateTime,   default=datetime.utcnow)
     auto_blocked  = db.Column(db.Boolean,    default=True)     # True = system, False = manual
     status        = db.Column(db.String(20), default='active') # active | unblocked
-    prediction_id = db.Column(db.Integer,    nullable=True)
-    unblocked_at  = db.Column(db.DateTime,   nullable=True)
-    attack_count  = db.Column(db.Integer,    default=1)        # how many attacks from this IP
+    prediction_id    = db.Column(db.Integer,    nullable=True)
+    unblocked_at     = db.Column(db.DateTime,   nullable=True)
+    attack_count     = db.Column(db.Integer,    default=1)        # how many attacks from this IP
+    firewall_blocked = db.Column(db.Boolean,    default=False)    # True = actually blocked in Windows Firewall
 
     def to_dict(self):
         return {
-            'id':            self.id,
-            'ip_address':    self.ip_address,
-            'reason':        self.reason,
-            'confidence':    round(self.confidence * 100, 2) if self.confidence else None,
-            'blocked_at':    self.blocked_at.isoformat() if self.blocked_at else None,
-            'auto_blocked':  self.auto_blocked,
-            'status':        self.status,
-            'prediction_id': self.prediction_id,
-            'unblocked_at':  self.unblocked_at.isoformat() if self.unblocked_at else None,
-            'attack_count':  self.attack_count
+            'id':               self.id,
+            'ip_address':       self.ip_address,
+            'reason':           self.reason,
+            'confidence':       round(self.confidence * 100, 2) if self.confidence else None,
+            'blocked_at':       self.blocked_at.isoformat() if self.blocked_at else None,
+            'auto_blocked':     self.auto_blocked,
+            'status':           self.status,
+            'prediction_id':    self.prediction_id,
+            'unblocked_at':     self.unblocked_at.isoformat() if self.unblocked_at else None,
+            'attack_count':     self.attack_count,
+            'firewall_blocked': self.firewall_blocked
         }
 
 
