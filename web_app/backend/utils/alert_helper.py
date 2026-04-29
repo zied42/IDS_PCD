@@ -98,19 +98,34 @@ def _unblock_ip_in_firewall(ip_address: str) -> bool:
 
 def auto_block_ip_if_needed(pred, threshold=0.0):
     """
-    Automatically block the source IP if:
-      1) prediction is 'Attack'
-      2) confidence >= threshold (default 0%)
-      3) src_ip is not None/empty
+    Automatically block the source IP based on system_mode in UserSettings:
+      - IDS mode: never auto-block (detection only)
+      - IPS mode: block if confidence >= saved threshold
 
     If the IP is already blocked (active), just increment attack_count.
     Returns the BlockedIP object or None.
     """
     if pred.prediction != 'Attack':
         return None
-    if pred.confidence < threshold:
-        return None
     if not pred.src_ip:
+        return None
+
+    # Read system settings from DB
+    from models.database import UserSettings
+    try:
+        settings = UserSettings.query.first()
+        system_mode = (settings.system_mode or 'ids') if settings else 'ids'
+        db_threshold = (settings.auto_block_threshold or 0.90) if settings else 0.90
+    except Exception:
+        system_mode = 'ids'
+        db_threshold = 0.90
+
+    # IDS mode = detection only, no auto-blocking
+    if system_mode != 'ips':
+        return None
+
+    # Check confidence threshold
+    if pred.confidence < db_threshold:
         return None
 
     # Check if already blocked
@@ -131,7 +146,7 @@ def auto_block_ip_if_needed(pred, threshold=0.0):
     # New block
     blocked = BlockedIP(
         ip_address       = pred.src_ip,
-        reason           = f'Auto-blocked: Attack detected with {round(pred.confidence * 100, 1)}% confidence',
+        reason           = f'Auto-blocked (IPS): Attack with {round(pred.confidence * 100, 1)}% confidence',
         confidence       = pred.confidence,
         auto_blocked     = True,
         status           = 'active',

@@ -99,7 +99,9 @@ class User(db.Model):
     id            = db.Column(db.Integer,    primary_key=True)
     username      = db.Column(db.String(80), unique=True, nullable=False)
     password_hash = db.Column(db.String(255),nullable=False)
-    role          = db.Column(db.String(20), default='analyst')  # admin | analyst | viewer
+    role          = db.Column(db.String(20), default='analyst')  # admin | analyst
+    email         = db.Column(db.String(120), nullable=True)
+    full_name     = db.Column(db.String(120), nullable=True)
     last_login    = db.Column(db.DateTime,   nullable=True)
 
     def to_dict(self):
@@ -107,6 +109,8 @@ class User(db.Model):
             'id':         self.id,
             'username':   self.username,
             'role':       self.role,
+            'email':      self.email,
+            'full_name':  self.full_name,
             'last_login': self.last_login.isoformat() if self.last_login else None
         }
 
@@ -177,6 +181,7 @@ class UserSettings(db.Model):
     notifications = db.Column(db.Boolean,    default=True)
     auto_block_enabled   = db.Column(db.Boolean, default=True)
     auto_block_threshold = db.Column(db.Float,   default=0.90)  # confidence threshold for auto-blocking
+    system_mode          = db.Column(db.String(10), default='ids')  # 'ids' | 'ips'
 
     def to_dict(self):
         return {
@@ -184,5 +189,6 @@ class UserSettings(db.Model):
             'language':             self.language,
             'notifications':        self.notifications,
             'auto_block_enabled':   self.auto_block_enabled,
-            'auto_block_threshold': round(self.auto_block_threshold * 100)
+            'auto_block_threshold': round(self.auto_block_threshold * 100),
+            'system_mode':          self.system_mode or 'ids'
         }

@@ -80,7 +80,7 @@ def load_model(name: str = 'xgboost'):
     _model_name = name
     _model_type = cfg['type']
 
-    print(f"✅ Model loaded: {_metadata.get('model_name', name)}")
+    print(f"[OK] Model loaded: {_metadata.get('model_name', name)}")
     print(f"   Type     : {_model_type}")
     print(f"   Features : {_metadata.get('n_features', 34)}")
     bal = _metadata.get('metrics', {}).get('balanced_accuracy', 0)

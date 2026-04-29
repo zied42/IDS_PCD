@@ -22,7 +22,7 @@ if sys.platform == 'win32':
 
 # ── Config ────────────────────────────────────────────────────────────────────
 API_URL    = 'http://localhost:5000'
-CSV_PATH   = r'C:\Users\hechem\Desktop\pcd\archive\full_df_binary_labels.csv'
+CSV_PATH   = r'C:\Users\ziedd\PycharmProjects\JupyterProject\archive\full_df_binary_labels.csv'
 DELAY      = 0.3    # seconds between each row (lower = faster)
 N_ROWS     = 500    # how many rows to simulate (None = full dataset)
 USERNAME   = 'admin'

@@ -7,12 +7,86 @@ import pandas as pd
 from datetime import datetime, timedelta
 from sqlalchemy import func
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import jwt_required
+from flask_jwt_extended import jwt_required, get_jwt
 from models.database import db, Prediction
 from utils.ml_loader import predict_single, predict_batch, get_model_name, FEATURE_COLUMNS
 from utils.alert_helper import create_alert_if_needed, auto_block_ip_if_needed
 
 predict_bp = Blueprint('predict', __name__)
+
+
+# ── Manual analysis (admin only) ──────────────────────────────────────────────
+@predict_bp.route('/analyses', methods=['POST'])
+@jwt_required()
+def add_analysis():
+    """
+    POST /api/analyses
+    Admin manually adds analysis records (e.g. from external tools).
+    Body: { "src_ip", "dst_ip", "prediction", "confidence", "protocol" }
+    """
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data provided'}), 400
+
+    required = ['src_ip', 'prediction', 'confidence']
+    missing  = [f for f in required if f not in data]
+    if missing:
+        return jsonify({'error': f'Missing fields: {missing}'}), 400
+
+    confidence_raw = float(data['confidence'])
+    confidence = confidence_raw / 100.0 if confidence_raw > 1 else confidence_raw
+
+    pred = Prediction(
+        src_ip     = data.get('src_ip'),
+        dst_ip     = data.get('dst_ip'),
+        src_port   = int(data['src_port']) if data.get('src_port') else None,
+        dst_port   = int(data['dst_port']) if data.get('dst_port') else None,
+        protocol   = int(data.get('protocol', 0)),
+        prediction = data['prediction'],
+        confidence = confidence,
+        model_used = 'manual',
+        needs_review = data.get('needs_review', False)
+    )
+    db.session.add(pred)
+    db.session.flush()
+
+    alert = create_alert_if_needed(pred)
+    if alert:
+        db.session.add(alert)
+
+    db.session.commit()
+
+    return jsonify({
+        'message': 'Analysis record added',
+        'prediction': pred.to_dict()
+    }), 201
+
+
+@predict_bp.route('/analyses/<int:analysis_id>', methods=['DELETE'])
+@jwt_required()
+def delete_analysis(analysis_id):
+    """
+    DELETE /api/analyses/<id>
+    Admin deletes a single analysis/prediction record.
+    """
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    pred = Prediction.query.get(analysis_id)
+    if not pred:
+        return jsonify({'error': 'Analysis not found'}), 404
+
+    from models.database import Alert
+    Alert.query.filter_by(prediction_id=pred.id).delete()
+    db.session.delete(pred)
+    db.session.commit()
+
+    return jsonify({'message': f'Analysis {analysis_id} deleted'}), 200
 
 CSV_LOG = os.path.join(os.path.dirname(__file__), '..', 'logs', 'predictions.csv')
 CSV_HEADERS = ['timestamp', 'src_ip', 'dst_ip', 'src_port', 'dst_port',

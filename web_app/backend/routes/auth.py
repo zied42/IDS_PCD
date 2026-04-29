@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify
-from flask_jwt_extended import create_access_token, jwt_required
+from flask_jwt_extended import create_access_token, jwt_required, get_jwt
 from werkzeug.security import check_password_hash, generate_password_hash
 from datetime import datetime
 from models.database import db, User
@@ -46,10 +46,9 @@ def login():
 def register():
     """
     POST /api/auth/register
-    Body: { "username": "zied", "password": "1234", "role": "analyst" }
-    Roles: admin | analyst | viewer
+    Body: { "username", "password", "role", "email", "full_name" }
+    Admin-only: creates a new user account.
     """
-    from flask_jwt_extended import get_jwt
     claims = get_jwt()
     if claims.get('role') != 'admin':
         return jsonify({'error': 'Admin access required to create users'}), 403
@@ -60,6 +59,9 @@ def register():
 
     if not data.get('username') or not data.get('password'):
         return jsonify({'error': 'Username and password required'}), 400
+
+    if len(data['password']) < 4:
+        return jsonify({'error': 'Password must be at least 4 characters'}), 400
 
     if User.query.filter_by(username=data['username']).first():
         return jsonify({'error': 'Username already exists'}), 409
@@ -72,7 +74,9 @@ def register():
     user = User(
         username=data['username'],
         password_hash=generate_password_hash(data['password']),
-        role=role
+        role=role,
+        email=data.get('email', ''),
+        full_name=data.get('full_name', '')
     )
     db.session.add(user)
     db.session.commit()
@@ -83,28 +87,52 @@ def register():
     }), 201
 
 
+# ── User Management (Admin only) ─────────────────────────────────────────────
+@auth_bp.route('/users', methods=['GET'])
+@jwt_required()
+def list_users():
+    """GET /api/auth/users — list all users (admin only)."""
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
+
+    users = User.query.order_by(User.id.asc()).all()
+    return jsonify([u.to_dict() for u in users]), 200
 
 
+@auth_bp.route('/users/<int:user_id>', methods=['DELETE'])
+@jwt_required()
+def delete_user(user_id):
+    """DELETE /api/auth/users/<id> — admin deletes a user account."""
+    claims = get_jwt()
+    if claims.get('role') != 'admin':
+        return jsonify({'error': 'Admin access required'}), 403
 
-"""
-zeyda  taw na7ida just for debugging 
+    from flask_jwt_extended import get_jwt_identity
+    current_user = get_jwt_identity()
 
-"""
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    # Prevent admin from deleting themselves
+    if user.username == current_user:
+        return jsonify({'error': 'Cannot delete your own account'}), 400
+
+    db.session.delete(user)
+    db.session.commit()
+
+    return jsonify({'message': f'User {user.username} deleted'}), 200
+
+
 @auth_bp.route('/me', methods=['GET'])
+@jwt_required()
 def me():
-    """
-    GET /api/auth/me
-    Returns current user info from JWT token.
-    """
-    from flask_jwt_extended import jwt_required, get_jwt_identity, get_jwt
-
-    @jwt_required()
-    def _me():
-        username = get_jwt_identity()
-        claims = get_jwt()
-        return jsonify({
-            'username': username,
-            'role': claims.get('role')
-        }), 200
-
-    return _me()
+    """GET /api/auth/me — current user info from JWT."""
+    from flask_jwt_extended import get_jwt_identity
+    username = get_jwt_identity()
+    claims = get_jwt()
+    return jsonify({
+        'username': username,
+        'role': claims.get('role')
+    }), 200

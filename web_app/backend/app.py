@@ -13,6 +13,7 @@ from routes.model_info import model_bp
 from routes.export     import export_bp
 from routes.settings   import settings_bp
 from routes.blocked_ips import blocked_ips_bp
+from routes.danger     import danger_bp
 
 
 def create_app():
@@ -31,6 +32,7 @@ def create_app():
     app.register_blueprint(export_bp,    url_prefix='/api/export')
     app.register_blueprint(settings_bp,  url_prefix='/api')
     app.register_blueprint(blocked_ips_bp,url_prefix='/api')
+    app.register_blueprint(danger_bp,    url_prefix='/api')
 
     with app.app_context():
         db.create_all()
