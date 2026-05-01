@@ -20,9 +20,11 @@ if sys.platform == 'win32':
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
     sys.stderr.reconfigure(encoding='utf-8', errors='replace')
 
+import os
+
 # ── Config ────────────────────────────────────────────────────────────────────
-API_URL    = 'http://localhost:5000'
-CSV_PATH   = r'C:\Users\ziedd\PycharmProjects\JupyterProject\archive\full_df_binary_labels.csv'
+API_URL    = os.environ.get('API_URL', 'http://localhost:5000')
+CSV_PATH   = os.environ.get('CSV_PATH', r'C:\Users\ziedd\PycharmProjects\JupyterProject\archive\full_df_binary_labels.csv')
 DELAY      = 0.3    # seconds between each row (lower = faster)
 N_ROWS     = 500    # how many rows to simulate (None = full dataset)
 USERNAME   = 'admin'

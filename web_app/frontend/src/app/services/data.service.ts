@@ -91,13 +91,6 @@ export class DataService {
   getBatches()              { return this.http.get<any[]>(`${this.api}/api/batches`); }
   deleteBatch(id: string)   { return this.http.delete<any>(`${this.api}/api/batches/${id}`); }
   getBatchResults(id: string) { return this.http.get<any>(`${this.api}/api/analyze/results/${id}`); }
-  downloadReport(batchId: string, format = 'csv') {
-    const token = localStorage.getItem('token');
-    window.open(
-      `${this.api}/api/export/report?batch_id=${batchId}&format=${format}&token=${token}`,
-      '_blank'
-    );
-  }
 
   // Model
   getModelInfo()            { return this.http.get<any>(`${this.api}/api/model/info`); }
@@ -107,6 +100,32 @@ export class DataService {
   // Settings
   getSettings()             { return this.http.get<any>(`${this.api}/api/settings`); }
   updateSettings(body: any) { return this.http.put<any>(`${this.api}/api/settings`, body); }
+
+  // Manual threat entry (admin)
+  addThreat(body: any)            { return this.http.post<any>(`${this.api}/api/analyses`, body); }
+  deleteThreat(id: number)        { return this.http.delete<any>(`${this.api}/api/analyses/${id}`); }
+
+  // User management (admin)
+  getUsers()                      { return this.http.get<any[]>(`${this.api}/api/auth/users`); }
+  createUser(body: any)           { return this.http.post<any>(`${this.api}/api/auth/register`, body); }
+  deleteUser(id: number)          { return this.http.delete<any>(`${this.api}/api/auth/users/${id}`); }
+
+  // Danger zone (admin)
+  clearAlerts()                   { return this.http.delete<any>(`${this.api}/api/admin/clear-alerts`); }
+  resetStats()                    { return this.http.delete<any>(`${this.api}/api/admin/reset-stats`); }
+
+  // Report downloads (uses token in query string for direct browser download)
+  downloadReport(batchId: string, format: string = 'csv') {
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ batch_id: batchId, format, token: token || '' });
+    window.open(`${this.api}/api/export/report?${params.toString()}`, '_blank');
+  }
+
+  downloadLast24hReport(format: string = 'pdf') {
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams({ mode: 'last24h', format, token: token || '' });
+    window.open(`${this.api}/api/export/report?${params.toString()}`, '_blank');
+  }
 
   // Blocked IPs
   getBlockedIPs(params?: any) {

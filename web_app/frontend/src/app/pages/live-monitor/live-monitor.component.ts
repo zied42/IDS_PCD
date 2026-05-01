@@ -73,7 +73,7 @@ import { NotificationService } from '../../services/notification.service';
                 <path d="M23 4v6h-6M1 20v-6h6"/>
                 <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
               </svg>
-              Auto-refresh every 3s
+              Auto-refresh every {{ currentRefreshSec }}s
             </span>
           </div>
           <div class="table-actions">
@@ -151,7 +151,15 @@ import { NotificationService } from '../../services/notification.service';
                         Système Bloqué
                       </span>
                     } @else if (flow.prediction === 'Attack') {
-                      <span class="badge badge-danger-outline">Non bloquée</span>
+                      <div style="display:flex;gap:8px;align-items:center;">
+                        <span class="badge badge-danger-outline">Non bloquée</span>
+                        <button class="btn-block-sm" (click)="blockIpManually(flow.src_ip)" title="Block IP">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                          </svg>
+                          Block
+                        </button>
+                      </div>
                     } @else {
                       <span class="badge badge-neutral">—</span>
                     }
@@ -469,6 +477,25 @@ import { NotificationService } from '../../services/notification.service';
         gap: 1rem;
       }
     }
+
+    .btn-block-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 2px 8px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: #ef4444;
+      background: transparent;
+      border: 1px solid #ef4444;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-block-sm:hover {
+      background: #ef4444;
+      color: white;
+    }
   `]
 })
 export class LiveMonitorComponent implements OnInit, OnDestroy {
@@ -476,6 +503,9 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
   pageSize = 50;
   currentPage = signal(1);
   isRefreshing = signal(false);
+  currentRefreshSec = 3;
+  private previousAttackCount = -1;
+  private audioCtx: AudioContext | null = null;
 
   // Stats
   stats = signal<any>({
@@ -527,7 +557,14 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
 
   private loadStats(): void {
     this.dataService.getLiveStats().subscribe({
-      next: (res) => this.stats.set(res),
+      next: (res) => {
+        const newAttacks = res?.today?.attacks ?? 0;
+        if (this.previousAttackCount >= 0 && newAttacks > this.previousAttackCount) {
+          this.playAlertSound();
+        }
+        this.previousAttackCount = newAttacks;
+        this.stats.set(res);
+      },
       error: (err) => console.error('Stats error', err)
     });
   }
@@ -576,11 +613,14 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
   }
 
   private startAutoRefresh(): void {
+    const stored = localStorage.getItem('refreshInterval');
+    this.currentRefreshSec = stored ? parseInt(stored, 10) : 3;
+    const ms = this.currentRefreshSec * 1000;
     this.refreshInterval = setInterval(() => {
       this.loadStats();
       this.loadFlows(this.currentPage());
       this.loadBlockedIPs();
-    }, 3000);
+    }, ms);
   }
 
   private stopAutoRefresh(): void {
@@ -609,6 +649,44 @@ export class LiveMonitorComponent implements OnInit, OnDestroy {
     if (page >= 1 && page <= this.totalPages()) {
       this.currentPage.set(page);
       this.loadFlows(page);
+    }
+  }
+
+  blockIpManually(ip: string): void {
+    this.dataService.blockIP(ip, 'Manual block from Live Monitor').subscribe({
+      next: () => {
+        this.notificationService.show(`IP ${ip} manually blocked`, 'success');
+        this.loadBlockedIPs();
+      },
+      error: (err) => {
+        const msg = err.error?.error || 'Failed to block IP';
+        this.notificationService.show(msg, 'error');
+      }
+    });
+  }
+
+  private playAlertSound(): void {
+    const soundEnabled = localStorage.getItem('soundAlerts') !== 'false';
+    if (!soundEnabled) return;
+    try {
+      if (!this.audioCtx) {
+        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      }
+      const ctx = this.audioCtx;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime);
+      osc.frequency.setValueAtTime(660, ctx.currentTime + 0.1);
+      osc.frequency.setValueAtTime(880, ctx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.4);
+    } catch (e) {
+      // Audio not supported or blocked by browser policy
     }
   }
 }

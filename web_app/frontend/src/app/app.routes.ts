@@ -1,5 +1,6 @@
 import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
+import { adminGuard } from './guards/admin.guard';
 
 export const routes: Routes = [
   {
@@ -34,11 +35,13 @@ export const routes: Routes = [
       },
       {
         path: 'upload',
-        loadComponent: () => import('./pages/upload/upload.component').then(m => m.UploadComponent)
+        loadComponent: () => import('./pages/upload/upload.component').then(m => m.UploadComponent),
+        canActivate: [adminGuard]
       },
       {
         path: 'model-info',
-        loadComponent: () => import('./pages/model-info/model-info.component').then(m => m.ModelInfoComponent)
+        loadComponent: () => import('./pages/model-info/model-info.component').then(m => m.ModelInfoComponent),
+        canActivate: [adminGuard]
       },
       {
         path: 'settings',

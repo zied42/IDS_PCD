@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+import { AuthService } from '../../services/auth.service';
 
 @Component({
   selector: 'app-sidebar',
@@ -60,26 +61,30 @@ import { RouterModule } from '@angular/router';
           <span class="nav-label">Statistics</span>
         </a>
 
-        <a routerLink="/upload" routerLinkActive="active" class="nav-item">
-          <span class="nav-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </span>
-          <span class="nav-label">Upload & Analyze</span>
-        </a>
+        @if (authService.isAdmin()) {
+          <div class="nav-divider"><span class="nav-divider-label">Admin</span></div>
 
-        <a routerLink="/model-info" routerLinkActive="active" class="nav-item">
-          <span class="nav-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 16v-4M12 8h.01"/>
-            </svg>
-          </span>
-          <span class="nav-label">Model Info</span>
-        </a>
+          <a routerLink="/upload" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+            </span>
+            <span class="nav-label">Upload & Analyze</span>
+          </a>
+
+          <a routerLink="/model-info" routerLinkActive="active" class="nav-item">
+            <span class="nav-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 16v-4M12 8h.01"/>
+              </svg>
+            </span>
+            <span class="nav-label">Model Info</span>
+          </a>
+        }
 
         <a routerLink="/settings" routerLinkActive="active" class="nav-item">
           <span class="nav-icon">
@@ -200,10 +205,19 @@ import { RouterModule } from '@angular/router';
 
     @media (max-width: 1024px) {
       .sidebar { width: 72px; }
-      .logo-text, .nav-label, .sidebar-footer { display: none; }
+      .logo-text, .nav-label, .sidebar-footer, .nav-divider { display: none; }
       .sidebar-header { justify-content: center; padding: 1rem; }
       .nav-item { justify-content: center; padding: 0.875rem; }
     }
+
+    .nav-divider { margin: 0.75rem 0 0.25rem; padding: 0 1rem; }
+    .nav-divider-label {
+      font-size: 0.625rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.08em;
+      color: var(--text-muted);
+    }
   `]
 })
-export class SidebarComponent {}
+export class SidebarComponent {
+  constructor(public authService: AuthService) {}
+}
